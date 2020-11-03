@@ -167,6 +167,76 @@ func TestTCPClient(t *testing.T) {
 	assert.True(t, clt.IsClosed())
 }
 
+func TestTCPClientWithSyncWrite(t *testing.T) {
+	assert.NotNil(t, GetTimeWheel())
+	listenLocalServer := func() (net.Listener, error) {
+		listener, err := net.Listen("tcp", ":0")
+		if err != nil {
+			return nil, err
+		}
+
+		go http.Serve(listener, nil)
+		return listener, nil
+	}
+
+	listener, err := listenLocalServer()
+	assert.Nil(t, err)
+	assert.NotNil(t, listener)
+
+	addr := listener.Addr().(*net.TCPAddr)
+	t.Logf("server addr: %v", addr)
+	clt := NewTCPClient(
+		WithServerAddress(addr.String()),
+		WithReconnectInterval(5e8),
+		WithConnectionNumber(1),
+		WithClientSyncWrite(true),
+	)
+	assert.NotNil(t, clt)
+	assert.True(t, clt.ID() > 0)
+	//assert.Equal(t, clt.endPointType, TCP_CLIENT)
+
+	var (
+		msgHandler MessageHandler
+	)
+	cb := func(session Session) error {
+		return newSessionCallback(session, &msgHandler)
+	}
+
+	clt.RunEventLoop(cb)
+	time.Sleep(1e9)
+
+	assert.Equal(t, 1, msgHandler.SessionNumber())
+	ss := msgHandler.array[0]
+	ss.SetCompressType(CompressNone)
+	conn := ss.(*session).Connection.(*gettyTCPConn)
+	assert.True(t, conn.compress == CompressNone)
+	beforeWriteBytes := atomic.LoadUint32(&conn.writeBytes)
+	beforeWritePkgNum := atomic.LoadUint32(&conn.writePkgNum)
+	_, err = conn.send([]byte("hello"))
+	assert.Equal(t, beforeWritePkgNum+1, atomic.LoadUint32(&conn.writePkgNum))
+	assert.Nil(t, err)
+	assert.Equal(t, beforeWriteBytes+5, atomic.LoadUint32(&conn.writeBytes))
+	err = ss.WriteBytes([]byte("hello"))
+	assert.Equal(t, beforeWriteBytes+10, atomic.LoadUint32(&conn.writeBytes))
+	assert.Equal(t, beforeWritePkgNum+2, atomic.LoadUint32(&conn.writePkgNum))
+	assert.Nil(t, err)
+	var pkgs [][]byte
+	pkgs = append(pkgs, []byte("hello"), []byte("hello"))
+	_, err = conn.send(pkgs)
+	assert.Equal(t, beforeWritePkgNum+4, atomic.LoadUint32(&conn.writePkgNum))
+	assert.Equal(t, beforeWriteBytes+20, atomic.LoadUint32(&conn.writeBytes))
+	assert.Nil(t, err)
+	ss.SetCompressType(CompressSnappy)
+	err = ss.WriteBytesArray(pkgs...)
+	assert.Nil(t, err)
+	assert.Equal(t, beforeWritePkgNum+6, atomic.LoadUint32(&conn.writePkgNum))
+	assert.Equal(t, beforeWriteBytes+30, atomic.LoadUint32(&conn.writeBytes))
+	assert.True(t, conn.compress == CompressSnappy)
+
+	clt.Close()
+	assert.True(t, clt.IsClosed())
+}
+
 func TestUDPClient(t *testing.T) {
 	var (
 		err  error

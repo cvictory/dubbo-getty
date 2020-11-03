@@ -33,10 +33,12 @@ func TestClientOptions(t *testing.T) {
 		WithReconnectInterval(5e8),
 		WithConnectionNumber(1),
 		WithRootCertificateFile(file),
+		WithClientSyncWrite(true),
 	)
 	assert.NotNil(t, clt)
 	assert.Equal(t, clt.endPointType, TCP_CLIENT)
 	assert.True(t, clt.endPointType > 0)
+	assert.True(t, clt.syncWrite)
 	assert.NotNil(t, clt.done)
 	assert.NotNil(t, clt.ssMap)
 	assert.Equal(t, clt.addr, addr)
@@ -56,10 +58,12 @@ func TestServerOptions(t *testing.T) {
 		WithWebsocketServerCert(cert),
 		WithWebsocketServerPrivateKey(key),
 		WithWebsocketServerRootCert(cert),
+		WithServerSyncWrite(true),
 	)
 	assert.NotNil(t, srv)
 	assert.Equal(t, srv.endPointType, TCP_SERVER)
 	assert.True(t, srv.endPointType > 0)
+	assert.True(t, srv.syncWrite)
 	assert.NotNil(t, srv.done)
 	assert.Equal(t, srv.addr, addr)
 	assert.Equal(t, srv.path, path)

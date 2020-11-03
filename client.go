@@ -141,6 +141,10 @@ func (c client) ID() EndPointID {
 func (c client) EndPointType() EndPointType {
 	return c.endPointType
 }
+// nolint
+func (c client) SyncWrite() bool {
+	return c.syncWrite
+}
 
 func (c *client) dialTCP() Session {
 	var (

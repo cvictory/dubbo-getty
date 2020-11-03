@@ -33,6 +33,8 @@ type ServerOptions struct {
 	cert       string
 	privateKey string
 	caCert     string
+	// write sync
+	syncWrite bool
 }
 
 // @addr server listen address.
@@ -77,6 +79,13 @@ func WithServerSslEnabled(sslEnabled bool) ServerOption {
 	}
 }
 
+// @syncWrite is sync write in writePackage
+func WithServerSyncWrite(syncWrite bool) ServerOption {
+	return func(o *ServerOptions) {
+		o.syncWrite = syncWrite
+	}
+}
+
 // @WithServerKeyCertChainPath sslConfig is tls config
 func WithServerTlsConfigBuilder(tlsConfigBuilder TlsConfigBuilder) ServerOption {
 	return func(o *ServerOptions) {
@@ -103,6 +112,8 @@ type ClientOptions struct {
 	// duration, the hash alg, the len of the private key.
 	// wss client will use it.
 	cert string
+	// write sync
+	syncWrite bool
 }
 
 // @addr is server address.
@@ -127,6 +138,13 @@ func WithConnectionNumber(num int) ClientOption {
 		if 0 < num {
 			o.number = num
 		}
+	}
+}
+
+// @syncWrite is sync write in writePackage
+func WithClientSyncWrite(syncWrite bool) ClientOption {
+	return func(o *ClientOptions) {
+		o.syncWrite = syncWrite
 	}
 }
 

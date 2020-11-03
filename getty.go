@@ -197,6 +197,8 @@ type EndPoint interface {
 	IsClosed() bool
 	// close the endpoint and free its resource
 	Close()
+	// write sync
+	SyncWrite() bool
 }
 
 type Client interface {

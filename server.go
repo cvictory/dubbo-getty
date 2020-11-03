@@ -114,6 +114,11 @@ func (s server) EndPointType() EndPointType {
 	return s.endPointType
 }
 
+// nolint
+func (s server) SyncWrite() bool {
+	return s.syncWrite
+}
+
 func (s *server) stop() {
 	var (
 		err error

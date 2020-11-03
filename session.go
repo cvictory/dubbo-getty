@@ -394,7 +394,8 @@ func (s *session) WritePkg(pkg interface{}, timeout time.Duration) error {
 		}
 	}()
 
-	if timeout <= 0 {
+	// if sync write and not timeout
+	if timeout <= 0 || s.endPoint.SyncWrite() {
 		pkgBytes, err := s.writer.Write(s, pkg)
 		if err != nil {
 			log.Warnf("%s, [session.WritePkg] session.writer.Write(@pkg:%#v) = error:%+v", s.Stat(), pkg, err)
@@ -524,7 +525,10 @@ func (s *session) run() {
 	// start read/write gr
 	atomic.AddInt32(&(s.grNum), 2)
 	go s.handleLoop()
-	go s.handlePackage()
+	// if it is async write, we will run some goroutine
+	if !s.endPoint.SyncWrite() {
+		go s.handlePackage()
+	}
 }
 
 func (s *session) handleLoop() {
@@ -617,7 +621,6 @@ LOOP:
 						if !ok {
 							loopFlag = false
 						}
-
 					default:
 						loopFlag = false
 						break
