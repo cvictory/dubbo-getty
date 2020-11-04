@@ -524,11 +524,11 @@ func (s *session) run() {
 
 	// start read/write gr
 	atomic.AddInt32(&(s.grNum), 2)
-	go s.handleLoop()
 	// if it is async write, we will run some goroutine
 	if !s.endPoint.SyncWrite() {
-		go s.handlePackage()
+		go s.handleLoop()
 	}
+	go s.handlePackage()
 }
 
 func (s *session) handleLoop() {
