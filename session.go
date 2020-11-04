@@ -34,6 +34,7 @@ import (
 	gxsync "github.com/dubbogo/gost/sync"
 	gxtime "github.com/dubbogo/gost/time"
 
+	"github.com/RussellLuo/timingwheel"
 	"github.com/gorilla/websocket"
 	perrors "github.com/pkg/errors"
 )
@@ -61,7 +62,9 @@ const (
 /////////////////////////////////////////
 
 var (
-	wheel *gxtime.Wheel
+	wheel          *gxtime.Wheel
+	netTimingWheel *timingwheel.TimingWheel
+	timingInitOnce sync.Once
 )
 
 func init() {
@@ -112,6 +115,10 @@ type session struct {
 	// read goroutines done signal
 	rDone chan struct{}
 	lock  sync.RWMutex
+	// it is used to trigger cron task.
+	timer *timingwheel.Timer
+	// it is used at schedule task.
+	scheduler periodScheduler
 }
 
 func newSession(endPoint EndPoint, conn Connection) *session {
@@ -527,8 +534,28 @@ func (s *session) run() {
 	// if it is async write, we will run some goroutine
 	if !s.endPoint.SyncWrite() {
 		go s.handleLoop()
+	} else {
+		s.cron()
 	}
 	go s.handlePackage()
+}
+
+func (s *session) cron() {
+	timingInitOnce.Do(func() {
+		netTimingWheel = timingwheel.NewTimingWheel(50*time.Millisecond, 20)
+		netTimingWheel.Start()
+	})
+	// avoid repeat invoke
+	if s.timer != nil {
+		s.timer.Stop()
+	}
+	s.scheduler = periodScheduler{period: s.period, idleTime: time.Hour}
+	s.timer = netTimingWheel.ScheduleFunc(s.scheduler, s.recron)
+}
+
+func (s *session) recron() {
+	s.doCron(true)
+	s.scheduler.idleTime = s.IdleTime()
 }
 
 func (s *session) handleLoop() {
@@ -539,7 +566,6 @@ func (s *session) handleLoop() {
 		wsFlag   bool
 		udpFlag  bool
 		loopFlag bool
-		wsConn   *gettyWSConn
 		counter  gxtime.CountWatch
 		outPkg   interface{}
 		pkgBytes []byte
@@ -561,7 +587,7 @@ func (s *session) handleLoop() {
 	}()
 
 	flag = true // do not do any read/Write/cron operation while got Write error
-	wsConn, wsFlag = s.Connection.(*gettyWSConn)
+
 	_, udpFlag = s.Connection.(*gettyUDPConn)
 	iovec = make([][]byte, 0, maxIovecNum)
 LOOP:
@@ -640,16 +666,21 @@ LOOP:
 			}
 
 		case <-wheel.After(s.period):
-			if flag {
-				if wsFlag {
-					err := wsConn.writePing()
-					if err != nil {
-						log.Warnf("wsConn.writePing() = error:%+v", perrors.WithStack(err))
-					}
-				}
-				s.listener.OnCron(s)
+			s.doCron(flag)
+		}
+	}
+}
+
+func (s *session) doCron(flag bool) {
+	wsConn, wsFlag := s.Connection.(*gettyWSConn)
+	if flag {
+		if wsFlag {
+			err := wsConn.writePing()
+			if err != nil {
+				log.Warnf("wsConn.writePing() = error:%+v", perrors.WithStack(err))
 			}
 		}
+		s.listener.OnCron(s)
 	}
 }
 
@@ -926,6 +957,10 @@ func (s *session) handleWSPackage() error {
 }
 
 func (s *session) stop() {
+	if s.timer != nil {
+		s.timer.Stop()
+	}
+
 	select {
 	case <-s.done: // s.done is a blocked channel. if it has not been closed, the default branch will be invoked.
 		return
@@ -978,4 +1013,17 @@ func (s *session) Close() {
 	s.stop()
 	log.Infof("%s closed now. its current gr num is %d",
 		s.sessionToken(), atomic.LoadInt32(&(s.grNum)))
+}
+
+type periodScheduler struct {
+	period   time.Duration
+	idleTime time.Duration
+}
+
+func (s periodScheduler) Next(prev time.Time) time.Time {
+	if s.period > s.idleTime && s.idleTime > 0 {
+		return time.Now().Add(s.idleTime)
+	} else {
+		return time.Now().Add(s.period)
+	}
 }

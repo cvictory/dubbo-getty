@@ -134,6 +134,8 @@ type Connection interface {
 	close(int)
 	// set related session
 	setSession(Session)
+	// get idle time
+	IdleTime() time.Duration
 }
 
 /////////////////////////////////////////

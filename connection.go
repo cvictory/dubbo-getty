@@ -143,6 +143,18 @@ func (c *gettyConn) SetWriteTimeout(wTimeout time.Duration) {
 	}
 }
 
+// get idle time. It depend on compare the last read deadline and last write deadline.
+// If the rLastDeadline and wLastDeadline are not set values, then it will return big value.
+func (c *gettyConn) IdleTime() time.Duration {
+	n := time.Now()
+	rTime := n.Sub(c.rLastDeadline)
+	wTime := n.Sub(c.wLastDeadline)
+	if rTime > wTime {
+		return wTime
+	}
+	return rTime
+}
+
 /////////////////////////////////////////
 // getty tcp connection
 /////////////////////////////////////////
