@@ -517,7 +517,7 @@ func (s *session) run() {
 		panic(errStr)
 	}
 
-	if s.wQ == nil {
+	if s.wQ == nil && !s.endPoint.SyncWrite() {
 		s.wQ = make(chan interface{}, defaultQLen)
 	}
 
