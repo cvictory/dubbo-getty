@@ -708,11 +708,13 @@ func (s *session) handlePackage() {
 			rBuf = rBuf[:runtime.Stack(rBuf, false)]
 			log.Errorf("[session.handlePackage] panic session %s: err=%s\n%s", s.sessionToken(), r, rBuf)
 		}
-
 		close(s.rDone)
+		// invoke OnClose too
+		s.listener.OnClose(s)
 		grNum := atomic.AddInt32(&(s.grNum), -1)
 		log.Infof("%s, [session.handlePackage] gr will exit now, left gr num %d", s.sessionToken(), grNum)
 		s.stop()
+
 		if err != nil {
 			log.Errorf("%s, [session.handlePackage] error:%+v", s.sessionToken(), perrors.WithStack(err))
 			if s != nil || s.listener != nil {
